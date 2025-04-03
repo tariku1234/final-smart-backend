@@ -299,11 +299,8 @@ router.post("/:id/escalate", auth, async (req, res) => {
     // Determine if the complaint can be escalated based on current stage and due date
     switch (complaint.currentStage) {
       case COMPLAINT_STAGES.STAKEHOLDER_FIRST:
-        // Check if response due date has passed or there's a response but still unresolved
-        if (
-          now > complaint.stakeholderFirstResponseDue ||
-          (complaint.responses.length > 0 && complaint.status !== COMPLAINT_STATUS.RESOLVED)
-        ) {
+        // Check if response due date has passed and no response yet
+        if (now > complaint.stakeholderFirstResponseDue && complaint.status !== COMPLAINT_STATUS.IN_PROGRESS) {
           canEscalate = true
           nextStage = COMPLAINT_STAGES.STAKEHOLDER_SECOND
           nextHandler = COMPLAINT_HANDLERS.STAKEHOLDER_OFFICE
@@ -315,7 +312,7 @@ router.post("/:id/escalate", auth, async (req, res) => {
         // Check if response due date has passed or there's a response but still unresolved
         if (
           now > complaint.stakeholderSecondResponseDue ||
-          (complaint.responses.length > 1 && complaint.status !== COMPLAINT_STATUS.RESOLVED)
+          (complaint.responses.length > 1 && complaint.status === COMPLAINT_STATUS.IN_PROGRESS)
         ) {
           canEscalate = true
           nextStage = COMPLAINT_STAGES.WEREDA_FIRST
@@ -327,10 +324,8 @@ router.post("/:id/escalate", auth, async (req, res) => {
         break
 
       case COMPLAINT_STAGES.WEREDA_FIRST:
-        if (
-          now > complaint.weredaFirstResponseDue ||
-          (complaint.responses.length > 2 && complaint.status !== COMPLAINT_STATUS.RESOLVED)
-        ) {
+        // Check if response due date has passed and no response yet
+        if (now > complaint.weredaFirstResponseDue && complaint.status !== COMPLAINT_STATUS.IN_PROGRESS) {
           canEscalate = true
           nextStage = COMPLAINT_STAGES.WEREDA_SECOND
           nextHandler = COMPLAINT_HANDLERS.WEREDA_ANTI_CORRUPTION
@@ -339,9 +334,10 @@ router.post("/:id/escalate", auth, async (req, res) => {
         break
 
       case COMPLAINT_STAGES.WEREDA_SECOND:
+        // Check if response due date has passed or there's a response but still unresolved
         if (
           now > complaint.weredaSecondResponseDue ||
-          (complaint.responses.length > 3 && complaint.status !== COMPLAINT_STATUS.RESOLVED)
+          (complaint.responses.length > 3 && complaint.status === COMPLAINT_STATUS.IN_PROGRESS)
         ) {
           canEscalate = true
           nextStage = COMPLAINT_STAGES.KIFLEKETEMA_FIRST
@@ -353,10 +349,8 @@ router.post("/:id/escalate", auth, async (req, res) => {
         break
 
       case COMPLAINT_STAGES.KIFLEKETEMA_FIRST:
-        if (
-          now > complaint.kifleketemaFirstResponseDue ||
-          (complaint.responses.length > 4 && complaint.status !== COMPLAINT_STATUS.RESOLVED)
-        ) {
+        // Check if response due date has passed and no response yet
+        if (now > complaint.kifleketemaFirstResponseDue && complaint.status !== COMPLAINT_STATUS.IN_PROGRESS) {
           canEscalate = true
           nextStage = COMPLAINT_STAGES.KIFLEKETEMA_SECOND
           nextHandler = COMPLAINT_HANDLERS.KIFLEKETEMA_ANTI_CORRUPTION
@@ -365,9 +359,10 @@ router.post("/:id/escalate", auth, async (req, res) => {
         break
 
       case COMPLAINT_STAGES.KIFLEKETEMA_SECOND:
+        // Check if response due date has passed or there's a response but still unresolved
         if (
           now > complaint.kifleketemaSecondResponseDue ||
-          (complaint.responses.length > 5 && complaint.status !== COMPLAINT_STATUS.RESOLVED)
+          (complaint.responses.length > 5 && complaint.status === COMPLAINT_STATUS.IN_PROGRESS)
         ) {
           canEscalate = true
           nextStage = COMPLAINT_STAGES.KENTIBA
@@ -601,8 +596,13 @@ router.get("/", auth, async (req, res) => {
     } else if (req.user.role === USER_ROLES.KIFLEKETEMA_ANTI_CORRUPTION) {
       // Kifleketema officers can see complaints at their level
       query.currentHandler = COMPLAINT_HANDLERS.KIFLEKETEMA_ANTI_CORRUPTION
+    } else if (req.user.role === USER_ROLES.KENTIBA_BIRO) {
+      // Kentiba Biro can see all complaints by default
+      // But if stage is specified, filter by stage
+      if (req.query.stage) {
+        query.currentStage = req.query.stage
+      }
     }
-    // Kentiba Biro can see all complaints
 
     // Filter by status if provided
     if (req.query.status && req.query.status !== "all") {

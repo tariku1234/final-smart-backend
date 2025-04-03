@@ -26,6 +26,13 @@ exports.OFFICE_TYPES = {
   OTHER: "other",
 }
 
+// Admin registration codes
+exports.ADMIN_REGISTRATION_CODES = {
+  wereda_anti_corruption: "wereda-code-123",
+  kifleketema_anti_corruption: "kifleketema-code-456",
+  kentiba_biro: "kentiba-code-789",
+}
+
 // Complaint stages
 exports.COMPLAINT_STAGES = {
   STAKEHOLDER_FIRST: "stakeholder_first",

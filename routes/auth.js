@@ -114,5 +114,97 @@ router.get("/me", auth, async (req, res) => {
   }
 })
 
+// @route   POST api/auth/forgot-password
+// @desc    Send password reset code
+// @access  Public
+router.post("/forgot-password", async (req, res) => {
+  try {
+    const { email } = req.body
+
+    // Check if user exists
+    const user = await User.findOne({ email })
+
+    if (!user) {
+      return res.status(404).json({ message: "User not found" })
+    }
+
+    // Generate a random 6-digit reset code
+    const resetCode = Math.floor(100000 + Math.random() * 900000).toString()
+
+    // Store the reset code and expiration time (1 hour from now)
+    user.resetCode = resetCode
+    user.resetCodeExpires = new Date(Date.now() + 3600000) // 1 hour
+    await user.save()
+
+    // In a real application, you would send an email with the reset code
+    // For this demo, we'll just return success
+    console.log(`Reset code for ${email}: ${resetCode}`)
+
+    res.json({ message: "Reset code sent to your email" })
+  } catch (err) {
+    console.error("Forgot password error:", err)
+    res.status(500).json({ message: "Server error" })
+  }
+})
+
+// @route   POST api/auth/verify-reset-code
+// @desc    Verify reset code
+// @access  Public
+router.post("/verify-reset-code", async (req, res) => {
+  try {
+    const { email, resetCode } = req.body
+
+    // Find user by email and check if reset code is valid and not expired
+    const user = await User.findOne({
+      email,
+      resetCode,
+      resetCodeExpires: { $gt: Date.now() },
+    })
+
+    if (!user) {
+      return res.status(400).json({ message: "Invalid or expired reset code" })
+    }
+
+    res.json({ message: "Reset code verified successfully" })
+  } catch (err) {
+    console.error("Verify reset code error:", err)
+    res.status(500).json({ message: "Server error" })
+  }
+})
+
+// @route   POST api/auth/reset-password
+// @desc    Reset password
+// @access  Public
+router.post("/reset-password", async (req, res) => {
+  try {
+    const { email, resetCode, newPassword } = req.body
+
+    // Find user by email and check if reset code is valid and not expired
+    const user = await User.findOne({
+      email,
+      resetCode,
+      resetCodeExpires: { $gt: Date.now() },
+    })
+
+    if (!user) {
+      return res.status(400).json({ message: "Invalid or expired reset code" })
+    }
+
+    // Update password
+    user.password = newPassword
+
+    // Clear reset code and expiration
+    user.resetCode = undefined
+    user.resetCodeExpires = undefined
+
+    await user.save()
+
+    res.json({ message: "Password reset successfully" })
+  } catch (err) {
+    console.error("Reset password error:", err)
+    res.status(500).json({ message: "Server error" })
+  }
+})
+
 module.exports = router
 

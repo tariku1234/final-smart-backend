@@ -67,9 +67,18 @@ const UserSchema = new mongoose.Schema({
   officePhone: {
     type: String,
   },
+  resetCode: {
+    type: String,
+  },
+  resetCodeExpires: {
+    type: Date,
+  },
   isApproved: {
     type: Boolean,
-    default: false,
+    default: function () {
+      // Kentiba Biro is automatically approved
+      return this.role === "kentiba_biro"
+    },
   },
   createdAt: {
     type: Date,
