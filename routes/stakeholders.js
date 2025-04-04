@@ -12,7 +12,7 @@ router.get("/approved", async (req, res) => {
     const stakeholders = await User.find({
       role: USER_ROLES.STAKEHOLDER_OFFICE,
       isApproved: true,
-    }).select("_id officeName officeType officeAddress")
+    }).select("_id officeName officeType officeAddress kifleketema wereda")
 
     res.json({ stakeholders })
   } catch (err) {
@@ -38,6 +38,8 @@ router.post("/register", async (req, res) => {
       officeType,
       officeAddress,
       officePhone,
+      kifleketema,
+      wereda,
     } = req.body
 
     // Check if user already exists
@@ -68,6 +70,8 @@ router.post("/register", async (req, res) => {
       officeType,
       officeAddress,
       officePhone,
+      kifleketema,
+      wereda,
       isApproved: false, // Requires approval from Kentiba Biro
     })
 
@@ -142,6 +146,8 @@ router.put("/:id/approve", auth, async (req, res) => {
         email: stakeholder.email,
         officeName: stakeholder.officeName,
         officeType: stakeholder.officeType,
+        kifleketema: stakeholder.kifleketema,
+        wereda: stakeholder.wereda,
         isApproved: stakeholder.isApproved,
       },
     })

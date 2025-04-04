@@ -67,6 +67,26 @@ const UserSchema = new mongoose.Schema({
   officePhone: {
     type: String,
   },
+  // New fields for Kifleketema and Wereda
+  kifleketema: {
+    type: String,
+    enum: [
+      "Lemi Kura",
+      "Arada",
+      "Addis Ketema",
+      "Lideta",
+      "Kirkos",
+      "Yeka",
+      "Bole",
+      "Akaky Kaliti",
+      "Nifas Silk-Lafto",
+      "Kolfe Keranio",
+      "Gulele",
+    ],
+  },
+  wereda: {
+    type: String,
+  },
   resetCode: {
     type: String,
   },

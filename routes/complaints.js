@@ -31,11 +31,24 @@ router.get("/dashboard/stats", auth, async (req, res) => {
       // Stakeholder offices can only see complaints directed to them
       query.stakeholderOffice = req.user.id
     } else if (req.user.role === USER_ROLES.WEREDA_ANTI_CORRUPTION) {
-      // Wereda officers can only see complaints at their level
+      // Wereda officers can only see complaints at their level and in their wereda
       query.currentHandler = COMPLAINT_HANDLERS.WEREDA_ANTI_CORRUPTION
+
+      // Get user's kifleketema and wereda
+      const user = await User.findById(req.user.id)
+      if (user && user.kifleketema && user.wereda) {
+        query.kifleketema = user.kifleketema
+        query.wereda = user.wereda
+      }
     } else if (req.user.role === USER_ROLES.KIFLEKETEMA_ANTI_CORRUPTION) {
-      // Kifleketema officers can only see complaints at their level
+      // Kifleketema officers can only see complaints at their level and in their kifleketema
       query.currentHandler = COMPLAINT_HANDLERS.KIFLEKETEMA_ANTI_CORRUPTION
+
+      // Get user's kifleketema
+      const user = await User.findById(req.user.id)
+      if (user && user.kifleketema) {
+        query.kifleketema = user.kifleketema
+      }
     }
     // Kentiba Biro can see all complaints
 
@@ -88,7 +101,7 @@ const upload = multer({
 })
 
 // @route   POST api/complaints
-// @desc    Create a new complaint (first stage) or second stage complaint
+// @desc    Create a new complaint (first stage) or update for second stage complaint
 // @access  Private (Citizen only)
 router.post("/", auth, upload.array("attachments", 5), async (req, res) => {
   try {
@@ -97,8 +110,17 @@ router.post("/", auth, upload.array("attachments", 5), async (req, res) => {
       return res.status(403).json({ message: "Only citizens can submit complaints" })
     }
 
-    const { title, description, stakeholderOfficeId, location, isSecondStage, originalComplaintId, additionalDetails } =
-      req.body
+    const {
+      title,
+      description,
+      stakeholderOfficeId,
+      location,
+      isSecondStage,
+      originalComplaintId,
+      additionalDetails,
+      kifleketema,
+      wereda,
+    } = req.body
 
     // Check if this is a second stage submission
     if (isSecondStage === "true" && originalComplaintId) {
@@ -136,42 +158,29 @@ router.post("/", auth, upload.array("attachments", 5), async (req, res) => {
         escalationTo = COMPLAINT_HANDLERS.KIFLEKETEMA_ANTI_CORRUPTION
       }
 
-      // Create new complaint for second stage
-      const complaint = new Complaint({
-        user: req.user.id,
-        title,
-        description,
-        stakeholderOffice: stakeholderOfficeId,
-        currentStage: nextStage,
-        currentHandler: nextHandler,
-        status: COMPLAINT_STATUS.PENDING,
-        location,
-        additionalDetails: additionalDetails || "",
-        relatedComplaint: originalComplaintId, // Reference to original complaint
-      })
+      // Update the original complaint instead of creating a new one
+      originalComplaint.title = title
+      originalComplaint.description = description
+      originalComplaint.additionalDetails = additionalDetails || ""
+      originalComplaint.currentStage = nextStage
+      originalComplaint.currentHandler = nextHandler
+      originalComplaint.status = COMPLAINT_STATUS.PENDING
 
-      // Add attachments if any
+      // Add new attachments if any
       if (req.files && req.files.length > 0) {
-        complaint.attachments = req.files.map((file) => file.path)
+        const newAttachments = req.files.map((file) => file.path)
+        originalComplaint.attachments = [...originalComplaint.attachments, ...newAttachments]
       }
 
       // Set due dates
-      complaint[dueDateField] = dueDate
+      originalComplaint[dueDateField] = dueDate
+      originalComplaint.updatedAt = now
 
-      await complaint.save()
-
-      // Update original complaint to reference this second stage complaint
-      originalComplaint.secondStageComplaint = complaint._id
-
-      // Also update the original complaint's stage
-      originalComplaint.currentStage = nextStage
-      originalComplaint.status = COMPLAINT_STATUS.ESCALATED
-
-      // Add to escalation history - using valid enum values
+      // Add to escalation history
       originalComplaint.escalationHistory.push({
         from: nextHandler,
-        to: escalationTo, // Using a valid enum value
-        reason: "Escalated to second stage by citizen",
+        to: escalationTo,
+        reason: "Second stage submission by citizen",
         date: now,
       })
 
@@ -194,9 +203,9 @@ router.post("/", auth, upload.array("attachments", 5), async (req, res) => {
       officePerformance.updatedAt = new Date()
       await officePerformance.save()
 
-      res.status(201).json({
+      res.status(200).json({
         message: "Second stage complaint submitted successfully",
-        complaint,
+        complaint: originalComplaint,
       })
     } else {
       // Regular first stage complaint submission
@@ -211,6 +220,11 @@ router.post("/", auth, upload.array("attachments", 5), async (req, res) => {
         return res.status(404).json({ message: "Stakeholder office not found or not approved" })
       }
 
+      // Validate kifleketema and wereda
+      if (!kifleketema || !wereda) {
+        return res.status(400).json({ message: "Kifleketema and Wereda are required" })
+      }
+
       // Create new complaint
       const complaint = new Complaint({
         user: req.user.id,
@@ -221,6 +235,8 @@ router.post("/", auth, upload.array("attachments", 5), async (req, res) => {
         currentHandler: COMPLAINT_HANDLERS.STAKEHOLDER_OFFICE,
         status: COMPLAINT_STATUS.PENDING,
         location,
+        kifleketema,
+        wereda,
       })
 
       // Add attachments if any
@@ -591,11 +607,24 @@ router.get("/", auth, async (req, res) => {
       // Stakeholder offices can only see complaints directed to them
       query.stakeholderOffice = req.user.id
     } else if (req.user.role === USER_ROLES.WEREDA_ANTI_CORRUPTION) {
-      // Wereda officers can see complaints at their level
+      // Wereda officers can see complaints at their level and in their wereda
       query.currentHandler = COMPLAINT_HANDLERS.WEREDA_ANTI_CORRUPTION
+
+      // Get user's kifleketema and wereda
+      const user = await User.findById(req.user.id)
+      if (user && user.kifleketema && user.wereda) {
+        query.kifleketema = user.kifleketema
+        query.wereda = user.wereda
+      }
     } else if (req.user.role === USER_ROLES.KIFLEKETEMA_ANTI_CORRUPTION) {
-      // Kifleketema officers can see complaints at their level
+      // Kifleketema officers can see complaints at their level and in their kifleketema
       query.currentHandler = COMPLAINT_HANDLERS.KIFLEKETEMA_ANTI_CORRUPTION
+
+      // Get user's kifleketema
+      const user = await User.findById(req.user.id)
+      if (user && user.kifleketema) {
+        query.kifleketema = user.kifleketema
+      }
     } else if (req.user.role === USER_ROLES.KENTIBA_BIRO) {
       // Kentiba Biro can see all complaints by default
       // But if stage is specified, filter by stage
@@ -618,7 +647,7 @@ router.get("/", auth, async (req, res) => {
 
     const complaints = await Complaint.find(query)
       .populate("user", "firstName lastName email")
-      .populate("stakeholderOffice", "officeName officeType")
+      .populate("stakeholderOffice", "officeName officeType kifleketema wereda")
       .sort({ updatedAt: -1 })
       .skip(skip)
       .limit(limit)

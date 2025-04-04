@@ -9,7 +9,8 @@ const { USER_ROLES, ADMIN_REGISTRATION_CODES } = require("../config/constants")
 // @access  Public
 router.post("/register-admin", async (req, res) => {
   try {
-    const { firstName, lastName, email, phone, password, idNumber, address, role, adminCode } = req.body
+    const { firstName, lastName, email, phone, password, idNumber, address, role, adminCode, kifleketema, wereda } =
+      req.body
 
     // Validate admin role
     if (!["wereda_anti_corruption", "kifleketema_anti_corruption", "kentiba_biro"].includes(role)) {
@@ -45,6 +46,8 @@ router.post("/register-admin", async (req, res) => {
       idNumber,
       address,
       role,
+      kifleketema,
+      wereda,
       // Kentiba Biro is automatically approved, others need approval
       isApproved: role === "kentiba_biro",
     })
@@ -116,6 +119,8 @@ router.put("/:id/approve", auth, async (req, res) => {
         lastName: admin.lastName,
         email: admin.email,
         role: admin.role,
+        kifleketema: admin.kifleketema,
+        wereda: admin.wereda,
         isApproved: admin.isApproved,
       },
     })
@@ -206,6 +211,87 @@ router.get("/user-statistics", auth, async (req, res) => {
 
     const kentibaAdminsCount = await User.countDocuments({ role: USER_ROLES.KENTIBA_BIRO })
 
+    // Get statistics by location
+    // Stakeholders by location
+    const stakeholdersByLocation = {}
+    const stakeholders = await User.find({ role: USER_ROLES.STAKEHOLDER_OFFICE })
+
+    stakeholders.forEach((stakeholder) => {
+      if (stakeholder.kifleketema && stakeholder.wereda) {
+        if (!stakeholdersByLocation[stakeholder.kifleketema]) {
+          stakeholdersByLocation[stakeholder.kifleketema] = {}
+        }
+
+        if (!stakeholdersByLocation[stakeholder.kifleketema][stakeholder.wereda]) {
+          stakeholdersByLocation[stakeholder.kifleketema][stakeholder.wereda] = {
+            total: 0,
+            approved: 0,
+            pending: 0,
+          }
+        }
+
+        stakeholdersByLocation[stakeholder.kifleketema][stakeholder.wereda].total++
+
+        if (stakeholder.isApproved) {
+          stakeholdersByLocation[stakeholder.kifleketema][stakeholder.wereda].approved++
+        } else {
+          stakeholdersByLocation[stakeholder.kifleketema][stakeholder.wereda].pending++
+        }
+      }
+    })
+
+    // Wereda admins by location
+    const weredaAdminsByLocation = {}
+    const weredaAdmins = await User.find({ role: USER_ROLES.WEREDA_ANTI_CORRUPTION })
+
+    weredaAdmins.forEach((admin) => {
+      if (admin.kifleketema && admin.wereda) {
+        if (!weredaAdminsByLocation[admin.kifleketema]) {
+          weredaAdminsByLocation[admin.kifleketema] = {}
+        }
+
+        if (!weredaAdminsByLocation[admin.kifleketema][admin.wereda]) {
+          weredaAdminsByLocation[admin.kifleketema][admin.wereda] = {
+            total: 0,
+            approved: 0,
+            pending: 0,
+          }
+        }
+
+        weredaAdminsByLocation[admin.kifleketema][admin.wereda].total++
+
+        if (admin.isApproved) {
+          weredaAdminsByLocation[admin.kifleketema][admin.wereda].approved++
+        } else {
+          weredaAdminsByLocation[admin.kifleketema][admin.wereda].pending++
+        }
+      }
+    })
+
+    // Kifleketema admins by location
+    const kifleketemaAdminsByLocation = {}
+    const kifleketemaAdmins = await User.find({ role: USER_ROLES.KIFLEKETEMA_ANTI_CORRUPTION })
+
+    kifleketemaAdmins.forEach((admin) => {
+      if (admin.kifleketema) {
+        if (!kifleketemaAdminsByLocation[admin.kifleketema]) {
+          kifleketemaAdminsByLocation[admin.kifleketema] = {
+            total: 0,
+            approved: 0,
+            pending: 0,
+          }
+        }
+
+        kifleketemaAdminsByLocation[admin.kifleketema].total++
+
+        if (admin.isApproved) {
+          kifleketemaAdminsByLocation[admin.kifleketema].approved++
+        } else {
+          kifleketemaAdminsByLocation[admin.kifleketema].pending++
+        }
+      }
+    })
+
     const stats = {
       citizens: {
         total: citizensCount,
@@ -214,16 +300,19 @@ router.get("/user-statistics", auth, async (req, res) => {
         total: stakeholdersTotal,
         approved: stakeholdersApproved,
         pending: stakeholdersPending,
+        byLocation: stakeholdersByLocation,
       },
       weredaAdmins: {
         total: weredaAdminsTotal,
         approved: weredaAdminsApproved,
         pending: weredaAdminsPending,
+        byLocation: weredaAdminsByLocation,
       },
       kifleketemaAdmins: {
         total: kifleketemaAdminsTotal,
         approved: kifleketemaAdminsApproved,
         pending: kifleketemaAdminsPending,
+        byLocation: kifleketemaAdminsByLocation,
       },
       kentibaAdmins: {
         total: kentibaAdminsCount,
@@ -263,6 +352,8 @@ router.get("/performance-stats", auth, async (req, res) => {
           _id: 1,
           officeName: 1,
           officeType: 1,
+          kifleketema: 1,
+          wereda: 1,
           totalComplaints: { $ifNull: [{ $arrayElemAt: ["$performance.totalComplaints", 0] }, 0] },
           resolvedComplaints: { $ifNull: [{ $arrayElemAt: ["$performance.resolvedComplaints", 0] }, 0] },
           escalatedComplaints: { $ifNull: [{ $arrayElemAt: ["$performance.escalatedComplaints", 0] }, 0] },
@@ -287,6 +378,8 @@ router.get("/performance-stats", auth, async (req, res) => {
           _id: 1,
           firstName: 1,
           lastName: 1,
+          kifleketema: 1,
+          wereda: 1,
           totalComplaints: { $ifNull: [{ $arrayElemAt: ["$performance.totalComplaints", 0] }, 0] },
           resolvedComplaints: { $ifNull: [{ $arrayElemAt: ["$performance.resolvedComplaints", 0] }, 0] },
           escalatedComplaints: { $ifNull: [{ $arrayElemAt: ["$performance.escalatedComplaints", 0] }, 0] },
@@ -311,6 +404,7 @@ router.get("/performance-stats", auth, async (req, res) => {
           _id: 1,
           firstName: 1,
           lastName: 1,
+          kifleketema: 1,
           totalComplaints: { $ifNull: [{ $arrayElemAt: ["$performance.totalComplaints", 0] }, 0] },
           resolvedComplaints: { $ifNull: [{ $arrayElemAt: ["$performance.resolvedComplaints", 0] }, 0] },
           escalatedComplaints: { $ifNull: [{ $arrayElemAt: ["$performance.escalatedComplaints", 0] }, 0] },
@@ -319,11 +413,58 @@ router.get("/performance-stats", auth, async (req, res) => {
       },
     ])
 
+    // Group performance stats by location
+    const stakeholderOfficesByLocation = {}
+    stakeholderOffices.forEach((office) => {
+      if (office.kifleketema && office.wereda) {
+        if (!stakeholderOfficesByLocation[office.kifleketema]) {
+          stakeholderOfficesByLocation[office.kifleketema] = {}
+        }
+
+        if (!stakeholderOfficesByLocation[office.kifleketema][office.wereda]) {
+          stakeholderOfficesByLocation[office.kifleketema][office.wereda] = []
+        }
+
+        stakeholderOfficesByLocation[office.kifleketema][office.wereda].push(office)
+      }
+    })
+
+    const weredaAdminsByLocation = {}
+    weredaAdmins.forEach((admin) => {
+      if (admin.kifleketema && admin.wereda) {
+        if (!weredaAdminsByLocation[admin.kifleketema]) {
+          weredaAdminsByLocation[admin.kifleketema] = {}
+        }
+
+        if (!weredaAdminsByLocation[admin.kifleketema][admin.wereda]) {
+          weredaAdminsByLocation[admin.kifleketema][admin.wereda] = []
+        }
+
+        weredaAdminsByLocation[admin.kifleketema][admin.wereda].push(admin)
+      }
+    })
+
+    const kifleketemaAdminsByLocation = {}
+    kifleketemaAdmins.forEach((admin) => {
+      if (admin.kifleketema) {
+        if (!kifleketemaAdminsByLocation[admin.kifleketema]) {
+          kifleketemaAdminsByLocation[admin.kifleketema] = []
+        }
+
+        kifleketemaAdminsByLocation[admin.kifleketema].push(admin)
+      }
+    })
+
     res.json({
       stats: {
         stakeholderOffices,
         weredaAdmins,
         kifleketemaAdmins,
+        byLocation: {
+          stakeholderOffices: stakeholderOfficesByLocation,
+          weredaAdmins: weredaAdminsByLocation,
+          kifleketemaAdmins: kifleketemaAdminsByLocation,
+        },
       },
     })
   } catch (err) {
